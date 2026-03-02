@@ -74,6 +74,48 @@ async function findContacts({
             secondaryContactIds: [],
         };
     }
+
+    // BFS Search (edge exists iff either email or phone_number match)
+    const queue = [...rows];
+    const visited = new Set<number>();
+    const emailIds = new Set<string>();
+    const phoneNumbers = new Set<string>();
+    let primaryContactId = null;
+    while (queue.length > 0) {
+        const curr = queue.shift()!;
+        if (!curr || visited.has(curr.id)) continue;
+        if (curr["link_precedence"] === "primary") {
+            console.log("primary found");
+            if (primaryContactId !== null) {
+                throw new Error("primaryContactId is null");
+            }
+            primaryContactId = curr.id;
+        }
+        if (!curr.email) emailIds.add(curr.email);
+        if (!curr["phone_number"]) phoneNumbers.add(curr["phone_number"]);
+        const neighbours = await db`
+        SELECT * FROM contact
+        WHERE 
+        ${curr.email !== null ? sql`email = ${curr.email}` : sql`FALSE`}
+        OR 
+        ${curr["phone_number"] !== null ? sql`phone_number = ${curr["phone_number"]}` : sql`FALSE`}`.values();
+
+        for (const neighbour of neighbours) {
+            if (!visited.has(neighbour.id)) queue.push(neighbour);
+        }
+    }
+
+    if (primaryContactId === null) {
+        throw new Error("primaryContactId is still null");
+    }
+
+    visited.delete(primaryContactId);
+    return {
+        primaryContactId,
+        emails: Array.from(emailIds),
+        phoneNumbers: Array.from(phoneNumbers),
+        secondaryContactIds: Array.from(visited),
+    };
 }
 /* ================================
    Routes
