@@ -60,6 +60,7 @@ async function findContacts({
     FROM contact
     WHERE ${emailFilter} OR ${phoneFilter}
   `.values();
+    console.log(rows);
 
     if (rows.length === 0) {
         const [contact] = await db`
@@ -67,6 +68,7 @@ async function findContacts({
         VALUES (${email}, ${phoneNumber}, 'primary')
         RETURNING *
         `;
+        console.log(contact);
         return {
             primaryContactId: contact.id,
             phoneNumbers: [contact["phone_number"]],
@@ -81,28 +83,33 @@ async function findContacts({
     const emailIds = new Set<string>();
     const phoneNumbers = new Set<string>();
     let primaryContactId = null;
+    let cnt = 0;
     while (queue.length > 0) {
         const curr = queue.shift()!;
-        if (!curr || visited.has(curr.id)) continue;
-        if (curr["link_precedence"] === "primary") {
+        console.log(`${cnt}: ${curr}`);
+        if (!curr || visited.has(curr[0])) continue;
+        if (curr[4] === "primary") {
             console.log("primary found");
             if (primaryContactId !== null) {
                 throw new Error("primaryContactId is null");
             }
-            primaryContactId = curr.id;
+            primaryContactId = curr[0];
         }
-        if (!curr.email) emailIds.add(curr.email);
-        if (!curr["phone_number"]) phoneNumbers.add(curr["phone_number"]);
+        if (!curr.email) emailIds.add(curr[2]);
+        if (!curr["phone_number"]) phoneNumbers.add(curr[1]);
         const neighbours = await db`
         SELECT * FROM contact
         WHERE 
-        ${curr.email !== null ? sql`email = ${curr.email}` : sql`FALSE`}
+        ${curr.email !== null ? sql`email = ${curr[2]}` : sql`FALSE`}
         OR 
-        ${curr["phone_number"] !== null ? sql`phone_number = ${curr["phone_number"]}` : sql`FALSE`}`.values();
+        ${curr[1] !== null ? sql`phone_number = ${curr[1]}` : sql`FALSE`}`.values();
 
+        visited.add(curr[0]);
         for (const neighbour of neighbours) {
             if (!visited.has(neighbour.id)) queue.push(neighbour);
         }
+
+        cnt += 1;
     }
 
     if (primaryContactId === null) {
@@ -123,9 +130,9 @@ async function findContacts({
 app.post("/identify", zValidator("json", inputSchema), async (c) => {
     try {
         const data = c.req.valid("json");
-
+        console.log("Starting");
         const contacts = await findContacts(data);
-
+        console.log("endiing");
         return c.json({
             success: true,
             data: contacts,
