@@ -43,6 +43,8 @@ async function findContacts({
     phoneNumber,
     email,
 }: IdentifyInput): Promise<ContactOutput> {
+    // 1. TODO add the case where secondary contacts are created
+    // 2. TODO add the case where primary become secondary
     if (!phoneNumber && !email) {
         throw new Error("Invalid data format");
     }
@@ -71,8 +73,8 @@ async function findContacts({
         console.log(contact);
         return {
             primaryContactId: contact.id,
-            phoneNumbers: [contact["phone_number"]],
-            emails: [contact["email"]],
+            phoneNumbers: [contact.phone_number],
+            emails: [contact.email],
             secondaryContactIds: [],
         };
     }
@@ -95,8 +97,8 @@ async function findContacts({
             }
             primaryContactId = curr[0];
         }
-        if (!curr.email) emailIds.add(curr[2]);
-        if (!curr["phone_number"]) phoneNumbers.add(curr[1]);
+        if (!curr[2]) emailIds.add(curr[2]);
+        if (!curr[1]) phoneNumbers.add(curr[1]);
         const neighbours = await db`
         SELECT * FROM contact
         WHERE 
