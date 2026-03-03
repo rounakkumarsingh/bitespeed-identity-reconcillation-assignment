@@ -4,9 +4,23 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 /* ================================
-   DB
-================================ */
-const db = new SQL("postgres://postgres@localhost:5432/postgres");
+    DB
+=============================== */
+const db = new SQL(process.env.NEON_CONNECTION_URL!);
+
+await db`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
+await db`CREATE TYPE linked_precedence AS ENUM ('primary', 'secondary')`;
+await db`
+CREATE TABLE IF NOT EXISTS contact (
+    id SERIAL PRIMARY KEY,
+    phone_number VARCHAR,
+    email VARCHAR,
+    linked_id INT,
+    link_precedence linked_precedence NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ DEFAULT NULL
+)`;
 
 /* ================================
    App
@@ -72,8 +86,8 @@ async function findContacts({
 
         return {
             primaryContactId: contact.id,
-            phoneNumbers: [contact.phone_number],
-            emails: [contact.email],
+            phoneNumbers: contact.phone_number ? [contact.phone_number] : [],
+            emails: contact.email ? [contact.email] : [],
             secondaryContactIds: [],
         };
     }
@@ -113,14 +127,14 @@ async function findContacts({
         const neighbours = await db`
         SELECT * FROM contact
         WHERE (
-        ${curr.email !== null ? sql`email = ${curr[2]}` : sql`FALSE`}
+        ${curr[2] !== null ? sql`email = ${curr[2]}` : sql`FALSE`}
         OR 
         ${curr[1] !== null ? sql`phone_number = ${curr[1]}` : sql`FALSE`})
         AND id != ${curr[0]}`.values();
 
         visited.add(curr[0]);
         for (const neighbour of neighbours) {
-            if (!visited.has(neighbour.id)) queue.push(neighbour);
+            if (!visited.has(neighbour[0])) queue.push(neighbour);
         }
 
         cnt += 1;
@@ -148,8 +162,8 @@ async function findContacts({
     visited.delete(primaryContactId);
     return {
         primaryContactId,
-        emails: Array.from(emailIds),
-        phoneNumbers: Array.from(phoneNumbers),
+        emails: Array.from(emailIds).filter(Boolean),
+        phoneNumbers: Array.from(phoneNumbers).filter(Boolean),
         secondaryContactIds: Array.from(visited),
     };
 }
