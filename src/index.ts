@@ -1,6 +1,6 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { SQL, sql } from "bun";
+import { Hono } from "hono";
 import { z } from "zod";
 
 /* ================================
@@ -43,8 +43,7 @@ async function findContacts({
     phoneNumber,
     email,
 }: IdentifyInput): Promise<ContactOutput> {
-    // 1. TODO add the case where secondary contacts are created
-    // 2. TODO add the case where primary become secondary
+    // 1. TODO add the case where primary become secondary
     if (!phoneNumber && !email) {
         throw new Error("Invalid data format");
     }
@@ -87,7 +86,10 @@ async function findContacts({
     let primaryContactId = null;
     let cnt = 0;
     while (queue.length > 0) {
-        const curr = queue.shift()!;
+        const curr = queue.shift();
+        if (!curr) {
+            throw new Error("curr is empty");
+        }
         console.log(`${cnt}: ${curr}`);
         if (!curr || visited.has(curr[0])) continue;
         if (curr[4] === "primary") {
@@ -97,14 +99,15 @@ async function findContacts({
             }
             primaryContactId = curr[0];
         }
-        if (!curr[2]) emailIds.add(curr[2]);
-        if (!curr[1]) phoneNumbers.add(curr[1]);
+        if (curr[2]) emailIds.add(curr[2]);
+        if (curr[1]) phoneNumbers.add(curr[1]);
         const neighbours = await db`
         SELECT * FROM contact
-        WHERE 
+        WHERE (
         ${curr.email !== null ? sql`email = ${curr[2]}` : sql`FALSE`}
         OR 
-        ${curr[1] !== null ? sql`phone_number = ${curr[1]}` : sql`FALSE`}`.values();
+        ${curr[1] !== null ? sql`phone_number = ${curr[1]}` : sql`FALSE`})
+        AND id != ${curr[0]}`.values();
 
         visited.add(curr[0]);
         for (const neighbour of neighbours) {
@@ -116,6 +119,22 @@ async function findContacts({
 
     if (primaryContactId === null) {
         throw new Error("primaryContactId is still null");
+    }
+
+    if (
+        (email ? !emailIds.has(email) : false) ||
+        (phoneNumber ? !phoneNumbers.has(phoneNumber) : false)
+    ) {
+        console.log("Creating new secondary entry");
+        const [contact] = await db`
+        INSERT INTO contact (email, phone_number, link_precedence, linked_id)
+        VALUES (${email}, ${phoneNumber}, 'secondary', ${primaryContactId})
+        RETURNING *
+        `;
+
+        visited.add(contact.id);
+        email && emailIds.add(email);
+        phoneNumber && phoneNumbers.add(phoneNumber);
     }
 
     visited.delete(primaryContactId);
