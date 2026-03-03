@@ -61,7 +61,7 @@ async function findContacts({
     FROM contact
     WHERE ${emailFilter} OR ${phoneFilter}
   `.values();
-    console.log(rows);
+
 
     if (rows.length === 0) {
         const [contact] = await db`
@@ -69,7 +69,7 @@ async function findContacts({
         VALUES (${email}, ${phoneNumber}, 'primary')
         RETURNING *
         `;
-        console.log(contact);
+
         return {
             primaryContactId: contact.id,
             phoneNumbers: [contact.phone_number],
@@ -90,8 +90,7 @@ async function findContacts({
         if (!curr) {
             throw new Error("curr is empty");
         }
-        console.log(`${cnt}: ${curr}`);
-        if (!curr || visited.has(curr[0])) continue;
+        if (visited.has(curr[0])) continue;
         if (curr[2]) emailIds.add(curr[2]);
         if (curr[1]) phoneNumbers.add(curr[1]);
         if (primaryContactId === null) {
@@ -99,7 +98,6 @@ async function findContacts({
             else primaryContactId = curr[2];
         } else {
             if (curr[4] === "primary") {
-                console.log(`setting ${curr[0]} to ${primaryContactId}`);
                 await db`
                 UPDATE contact
                 SET linked_id = ${primaryContactId}, link_precedence = 'secondary'
@@ -136,7 +134,6 @@ async function findContacts({
         (email ? !emailIds.has(email) : false) ||
         (phoneNumber ? !phoneNumbers.has(phoneNumber) : false)
     ) {
-        console.log("Creating new secondary entry");
         const [contact] = await db`
         INSERT INTO contact (email, phone_number, link_precedence, linked_id)
         VALUES (${email}, ${phoneNumber}, 'secondary', ${primaryContactId})
@@ -162,15 +159,12 @@ async function findContacts({
 app.post("/identify", zValidator("json", inputSchema), async (c) => {
     try {
         const data = c.req.valid("json");
-        console.log("Starting");
-        const contacts = await findContacts(data);
-        console.log("endiing");
+    const contacts = await findContacts(data);
         return c.json({
             success: true,
             data: contacts,
         });
     } catch (err) {
-        console.error(err);
 
         return c.json(
             {
