@@ -92,15 +92,26 @@ async function findContacts({
         }
         console.log(`${cnt}: ${curr}`);
         if (!curr || visited.has(curr[0])) continue;
-        if (curr[4] === "primary") {
-            console.log("primary found");
-            if (primaryContactId !== null) {
-                throw new Error("primaryContactId is null");
-            }
-            primaryContactId = curr[0];
-        }
         if (curr[2]) emailIds.add(curr[2]);
         if (curr[1]) phoneNumbers.add(curr[1]);
+        if (primaryContactId === null) {
+            if (curr[4] === "primary") primaryContactId = curr[0];
+            else primaryContactId = curr[2];
+        } else {
+            if (curr[4] === "primary") {
+                console.log(`setting ${curr[0]} to ${primaryContactId}`);
+                await db`
+                UPDATE contact
+                SET linked_id = ${primaryContactId}, link_precedence = 'secondary'
+                WHERE id = ${curr[0]}
+                `;
+                await db`
+                UPDATE contact
+                SET linked_id = ${primaryContactId}
+                WHERE linked_id = ${curr[0]}
+                `;
+            }
+        }
         const neighbours = await db`
         SELECT * FROM contact
         WHERE (
