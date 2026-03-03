@@ -7,21 +7,6 @@ import { z } from "zod";
     DB
 =============================== */
 const db = new SQL(process.env.NEON_CONNECTION_URL!);
-
-await db`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-await db`CREATE TYPE linked_precedence AS ENUM ('primary', 'secondary')`;
-await db`
-CREATE TABLE IF NOT EXISTS contact (
-    id SERIAL PRIMARY KEY,
-    phone_number VARCHAR,
-    email VARCHAR,
-    linked_id INT,
-    link_precedence linked_precedence NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ DEFAULT NULL
-)`;
-
 /* ================================
    App
 ================================ */
@@ -75,7 +60,6 @@ async function findContacts({
     FROM contact
     WHERE ${emailFilter} OR ${phoneFilter}
   `.values();
-
 
     if (rows.length === 0) {
         const [contact] = await db`
@@ -173,13 +157,12 @@ async function findContacts({
 app.post("/identify", zValidator("json", inputSchema), async (c) => {
     try {
         const data = c.req.valid("json");
-    const contacts = await findContacts(data);
+        const contacts = await findContacts(data);
         return c.json({
             success: true,
             data: contacts,
         });
     } catch (err) {
-
         return c.json(
             {
                 success: false,
@@ -190,4 +173,7 @@ app.post("/identify", zValidator("json", inputSchema), async (c) => {
     }
 });
 
-export default app;
+export default {
+    port: 8080,
+    fetch: app.fetch,
+};

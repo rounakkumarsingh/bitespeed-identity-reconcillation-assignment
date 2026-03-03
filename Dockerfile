@@ -7,6 +7,6 @@ RUN bun install --production
 
 COPY . .
 
-EXPOSE 3000
+ENV PORT=8080
 
 CMD ["bun", "run", "src/index.ts"]
